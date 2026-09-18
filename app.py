@@ -11,14 +11,16 @@ def resolve():
     if not url:
         return jsonify({"status": "error", "message": "No URL provided"}), 400
 
-    # إعدادات yt-dlp لجلب رابط MP4 مدمج خفيف (360p / itag 18)
+    # إعدادات متطورة لتجاوز حظر الـ Datacenter
     ydl_opts = {
         'format': '18/best[ext=mp4]/best',
         'quiet': True,
         'no_warnings': True,
+        'socket_timeout': 15,
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android_testsuite', 'mweb']
+                'player_client': ['android_creator', 'mweb'],
+                'player_skip': ['webpage', 'configs']  # تخطي صفحة الويب التي تطلب الكابتشا
             }
         }
     }
@@ -28,13 +30,22 @@ def resolve():
             info = ydl.extract_info(url, download=False)
             stream_url = info.get('url')
             
-            # إرجاع نفس الـ JSON اللي يستناه الآيباد
             return jsonify({
                 "status": "stream",
                 "url": stream_url
             })
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        # محاولة ثانية بكليينت احتياطي إذا فشل الأول
+        try:
+            ydl_opts['extractor_args']['youtube']['player_client'] = ['tv_embedded']
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                return jsonify({
+                    "status": "stream",
+                    "url": info.get('url')
+                })
+        except Exception as e2:
+            return jsonify({"status": "error", "message": str(e2)}), 500
 
 @app.route('/', methods=['GET'])
 def health():
