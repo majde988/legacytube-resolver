@@ -4,6 +4,14 @@ import yt_dlp
 
 app = Flask(__name__)
 
+# فحص مسار الكوكيز (سواء محلياً أو في مسار Render السري)
+COOKIE_PATH = None
+for path in ['/etc/secrets/cookies.txt', 'cookies.txt']:
+  if os.path.exists(path):
+    COOKIE_PATH = path
+    print(f'==> Found cookies at: {COOKIE_PATH}', flush=True)
+    break
+
 
 @app.route('/', methods=['POST'])
 def resolve():
@@ -13,13 +21,12 @@ def resolve():
   if not url:
     return jsonify({'status': 'error', 'message': 'No URL provided'}), 400
 
-  # إعدادات yt-dlp مع تفعيل الكوكيز الرسمية
   ydl_opts = {
       'format': '18/best[ext=mp4]/best',
       'quiet': True,
       'no_warnings': True,
       'socket_timeout': 20,
-      'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None,
+      'cookiefile': COOKIE_PATH,  # استعمال المسار الحقيقي للكوكيز
   }
 
   try:
@@ -27,7 +34,6 @@ def resolve():
       info = ydl.extract_info(url, download=False)
       stream_url = info.get('url')
 
-      # احتياط: إذا كان الرابط داخل قائمة formats
       if not stream_url and 'formats' in info:
         for f in info['formats']:
           if f.get('format_id') == '18' or (
@@ -43,7 +49,10 @@ def resolve():
 
 @app.route('/', methods=['GET'])
 def health():
-  return 'LegacyTube Resolver is Running!', 200
+  return (
+      f'LegacyTube Resolver is Running! (Cookies: {COOKIE_PATH is not None})',
+      200,
+  )
 
 
 if __name__ == '__main__':
